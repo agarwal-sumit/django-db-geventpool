@@ -49,19 +49,14 @@ class DatabaseConnectionPool(object):
 
     @property
     def size(self):
-        with self.lock:
-            return len(self._conns)
+        return len(self._conns)
 
     def get(self):
         try:
             if self.size >= self.maxsize or self.pool.qsize():
                 conn = self.pool.get()
             else:
-                with self.lock:
-                    if self.size >= self.maxsize:
-                        conn = self.pool.get()
-                    else:
-                        conn = self.pool.get_nowait()
+                conn = self.pool.get_nowait()
 
             try:
                 # check connection is still valid
@@ -73,14 +68,16 @@ class DatabaseConnectionPool(object):
         except queue.Empty:
             conn = None
             logger.debug("DB connection queue empty, creating a new one")
-
         if conn is None:
-            try:
-                conn = self.create_connection()
-            except Exception:
-                raise
-            else:
-                self._conns.add(conn)
+            with self.lock:
+                if self.size >= self.maxsize:
+                    return self.get()
+                try:
+                    conn = self.create_connection()
+                except Exception:
+                    raise
+                else:
+                    self._conns.add(conn)
 
         return conn
 
