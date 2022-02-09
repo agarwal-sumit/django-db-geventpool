@@ -57,7 +57,11 @@ class DatabaseConnectionPool(object):
             if self.size >= self.maxsize or self.pool.qsize():
                 conn = self.pool.get()
             else:
-                conn = self.pool.get_nowait()
+                with self.lock:
+                    if self.size >= self.maxsize:
+                        conn = self.pool.get()
+                    else:
+                        conn = self.pool.get_nowait()
 
             try:
                 # check connection is still valid
